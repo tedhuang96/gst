@@ -4,6 +4,7 @@ from src.gumbel_social_transformer.mha import VanillaMultiheadAttention
 from src.gumbel_social_transformer.utils import _get_activation_fn
 
 class NodeEncoderLayer(nn.Module):
+    """Ghost version"""
     def __init__(self, d_model, nhead, dim_feedforward=512, dropout=0.1, activation="relu", attn_mech='vanilla'):
         super(NodeEncoderLayer, self).__init__()
         self.attn_mech = attn_mech
@@ -23,6 +24,25 @@ class NodeEncoderLayer(nn.Module):
         self.d_model = d_model
     
     def forward(self, x, sampled_edges, attn_mask, device="cuda:0"):
+        """
+        Encode pedestrian edge with node information.
+        inputs:
+            - x: vertices representing pedestrians of one sample. 
+                # bsz is batch size corresponding to Transformer setting. it corresponds to time steps in pedestrian setting.
+                # (bsz, nnode, d_model)
+            - sampled_edges: sampled adjacency matrix with ghost at the last column.
+                # (time_step, nnode <target>, nhead_edges, neighbor_node)
+                # where neighbor_node = nnode+1 <neighbor>
+            - attn_mask: attention mask provided in advance.
+                # (bsz, nnode <target>, nnode <neighbor>)
+                # row -> target, col -> neighbor
+                # 1. means yes, i.e. attention exists.  0. means no.
+            - device: 'cuda:0' or 'cpu'.
+        outputs:
+            - x: encoded vertices. # (bsz, nnode, d_model)
+            - attn_weights: attention weights. # (bsz, nhead, nnode <target>, neighbor_node)
+                # where neighbor_node = nnode+1 <neighbor>
+        """
         if self.attn_mech == 'vanilla':
             bsz = x.shape[0]
             attn_mask_ped = (attn_mask.sum(-1) > 0).float().unsqueeze(-1).to(device)

@@ -5,6 +5,7 @@ from src.gumbel_social_transformer.mha import VanillaMultiheadAttention
 from src.gumbel_social_transformer.utils import _get_activation_fn, gumbel_softmax
 
 class EdgeSelector(nn.Module):
+    """Ghost version."""
     def __init__(self, d_model, nhead=4, dropout=0.1, activation="relu"):
         super(EdgeSelector, self).__init__()
         assert 4 * d_model % nhead == 0
@@ -20,6 +21,32 @@ class EdgeSelector(nn.Module):
         
     
     def forward(self, x, A, attn_mask, tau=1., hard=False, device='cuda:0'):
+        """
+        Encode pedestrian edge with node information.
+        inputs:
+            - x: vertices representing pedestrians of one sample. 
+                # * bsz is batch size corresponding to Transformer setting. it corresponds to time steps in pedestrian setting.
+                # (bsz, node, d_motion)
+            - A: edges representation relationships between pedestrians of one sample.
+                # (bsz, node, node, d_motion)
+                # row -> neighbor, col -> target
+            - attn_mask: attention mask provided in advance.
+                # (bsz, target_node, neighbor_node)
+                # 1. means yes, i.e. attention exists.  0. means no.
+            - tau: temperature hyperparameter of gumbel softmax. 
+                # Need annealing though training.
+            - hard: hard or soft sampling.
+                # True means one-hot sample for evaluation.
+                # False means soft sample for reparametrization.
+            - device: 'cuda:0' or 'cpu'.
+        outputs:
+            - edge_multinomial: The categorical distribution over the connections from targets to the neighbors
+                # (time_step, target_node, num_heads, neighbor_node)
+                # neighbor_node = nnode + 1 in ghost mode
+            - sampled_edges: The edges sampled from edge_multinomial
+                # (time_step, target_node, num_heads, neighbor_node)
+                # neighbor_node = nnode + 1 in ghost mode
+        """
         bsz, nnode, d_model = x.shape
         attn_mask_ped = (attn_mask.sum(-1) > 0).float().unsqueeze(-1).to(device)
         x = self.norm_node(x)
@@ -61,6 +88,9 @@ class EdgeSelector(nn.Module):
 
 
     def edge_sampler(self, edge_multinomial, tau=1., hard=False):
+        """
+        Sample from edge_multinomial using gumbel softmax for differentiable search.
+        """
         logits = torch.log(edge_multinomial+1e-10)
         sampled_edges = gumbel_softmax(logits, tau=tau, hard=hard, eps=1e-10)
         return sampled_edges

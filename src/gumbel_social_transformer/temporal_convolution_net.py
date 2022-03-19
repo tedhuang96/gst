@@ -38,6 +38,13 @@ class TemporalConvolutionNet(nn.Module):
         self.activation = _get_activation_fn(activation)
     
     def forward(self, x):
+        """
+        Forward function.
+        inputs:
+            - x # (batch, obs_seq_len, node, embedding_size) # in_channels = embedding_size
+        outputs:
+            - out # (batch, pred_seq_len, node, output_size) # output_size = 5 for bivariate Gaussian
+        """
         for i in range(self.nconv):
             x_norm = self.norms[i](x)
             x_perm = x_norm.permute(0, 3, 1, 2)
